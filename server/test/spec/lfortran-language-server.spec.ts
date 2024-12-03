@@ -8,6 +8,8 @@ import {
   Diagnostic,
   DiagnosticSeverity,
   DidChangeConfigurationParams,
+  DocumentHighlight,
+  DocumentHighlightParams,
   DocumentSymbolParams,
   Hover,
   HoverParams,
@@ -888,6 +890,79 @@ describe("LFortranLanguageServer", () => {
       const text: string = "foo bar baz qux";
       document.getText.returns(text);
 
+      const symbols: SymbolInformation[] = [
+        {
+          name: "foo",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 0,
+              },
+              end: {
+                line: 0,
+                character: 3,
+              },
+            },
+          },
+        },
+        {
+          name: "bar",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 4,
+              },
+              end: {
+                line: 0,
+                character: 7,
+              },
+            },
+          },
+        },
+        {
+          name: "baz",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 8,
+              },
+              end: {
+                line: 0,
+                character: 11,
+              },
+            },
+          },
+        },
+        {
+          name: "qux",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 12,
+              },
+              end: {
+                line: 0,
+                character: 15,
+              },
+            },
+          },
+        },
+      ];
+
+      server.index(uri, symbols);
+
       const newName: string = "quo";
 
       const expected: WorkspaceEdit = {
@@ -920,6 +995,124 @@ describe("LFortranLanguageServer", () => {
       };
 
       const actual: WorkspaceEdit = await server.onRenameRequest(params);
+      assert.deepEqual(actual, expected);
+    });
+  });
+
+  describe("onDocumentHighlight", () => {
+    it("does not highlight symbols when they are not recognized", async () => {
+      const text: string = "foo bar foo baz.foo";
+      document.getText.returns(text);
+
+      const symbols: SymbolInformation[] = [
+        {
+          name: "foo",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 0,
+              },
+              end: {
+                line: 0,
+                character: 3,
+              },
+            },
+          },
+        },
+      ];
+
+      server.index(uri, symbols);
+
+      const params: DocumentHighlightParams = {
+        textDocument: document,
+        position: {
+          line: 0,
+          character: 4,
+        },
+      };
+
+      const actual: DocumentHighlight[] | undefined | null = await server.onDocumentHighlight(params);
+      assert.isUndefined(actual);
+    });
+
+    it("highlights symbols when they are recognized", async () => {
+      const text: string = "foo bar foo baz.foo";
+      document.getText.returns(text);
+
+      const symbols: SymbolInformation[] = [
+        {
+          name: "foo",
+          kind: SymbolInformation.Function,
+          location: {
+            uri: uri,
+            range: {
+              start: {
+                line: 0,
+                character: 0,
+              },
+              end: {
+                line: 0,
+                character: 3,
+              },
+            },
+          },
+        },
+      ];
+
+      server.index(uri, symbols);
+
+      const expected: DocumentHighlight[] = [
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 0,
+            },
+            end: {
+              line: 0,
+              character: 3,
+            },
+          },
+        },
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 8,
+            },
+            end: {
+              line: 0,
+              character: 11,
+            },
+          },
+        },
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 16,
+            },
+            end: {
+              line: 0,
+              character: 19,
+            },
+          },
+        },
+      ];
+
+      const params: DocumentHighlightParams = {
+        textDocument: document,
+        position: {
+          line: 0,
+          character: 0,
+        },
+      };
+
+      const actual: DocumentHighlight[] = await server.onDocumentHighlight(params);
+      assert.isDefined(actual);
       assert.deepEqual(actual, expected);
     });
   });

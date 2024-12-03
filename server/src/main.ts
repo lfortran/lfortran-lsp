@@ -35,6 +35,7 @@ connection.onCompletion(server.onCompletion.bind(server));
 connection.onCompletionResolve(server.onCompletionResolve.bind(server));
 connection.onHover(server.onHover.bind(server));
 connection.onRenameRequest(server.onRenameRequest.bind(server));
+connection.onDocumentHighlight(server.onDocumentHighlight.bind(server));
 
 documents.onDidClose(server.onDidClose.bind(server));
 documents.onDidChangeContent(server.onDidChangeContent.bind(server));

@@ -10,6 +10,8 @@ import { assert } from "chai";
 // import the webdriver and the high level browser wrapper
 import {
   EditorView,
+  InputBox,
+  QuickPickItem,
   Setting,
   SettingsEditor,
   TextEditor,
@@ -142,21 +144,15 @@ async function getErrorAlert(): Promise<string> {
   // ---------------------------------------------------------------------
   for (let i = 0, k = 10; i < k; i++) {
     try {
-      const outerElement: WebElement =
+      const errorAlert: WebElement =
         await driver.wait(
           until.elementLocated(
             By.css('div.message[role="alert"][aria-label^="error"] div')),
           timeout);
-      const innerElement: WebElement =
-        await outerElement.findElement(
-          By.css(':first-child'));
-      const outerMessage: string = await outerElement.getText();
-      const innerMessage: string = await innerElement.getText();
-      // NOTE: Drop the inner message from the error message since it contains
-      // the name of the plugin:
-      // ---------------------------------------------------------------------
       const errorMessage: string =
-        outerMessage.substring(0, outerMessage.length - innerMessage.length);
+        await driver.executeScript(
+          "return arguments[0].firstChild.nodeValue",
+          errorAlert);
       return errorMessage;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
@@ -168,6 +164,83 @@ async function getErrorAlert(): Promise<string> {
     }
   }
   throw new Error("This should not be reached!");
+}
+
+const GET_MONOSPACE_CHAR_WIDTH: string = `
+  const span = document.createElement('span');
+  span.textContent = 'a';
+  arguments[0].appendChild(span);
+  const width = span.offsetWidth;
+  arguments[0].removeChild(span);
+  return width;
+`;
+
+async function getHighlightedText(): Promise<string[]> {
+  // ---------------------------------------------------------------------------
+  // How the algorithm works:
+  // ---------------------------------------------------------------------------
+  // 1. VSCode models each line of text as a `div.view-line` with a `style`
+  //    attribute that contains its vertical offset (`top`) and its `height`,
+  //    both in pixels.
+  // 2. When a symbol is highlighted, each occurrence of that symbol has its
+  //    location recorded in an overlay. Each overlay consists of a row with
+  //    elements representing how to format each subsequence of character.
+  // 3. Each overlay row has the same `style` attribute as its respective
+  //    `div.view-line`, as described in (1.). We can use these to look up the
+  //    line of text associated with each overlay.
+  // 4. All occurrences of the symbol within the overlay row are stored with
+  //    their horizontal offset (`left`) and width in pixels. Since the font is
+  //    monospace, all characters will have the same width and both the
+  //    horizontal offset and width will be divisible by the width of a single
+  //    character. The quotients tell us the number of characters to skip before
+  //    the symbol occurs and the number of characters in the symbol,
+  //    respectively.
+  // 5. Once all the symbol occurrences are extracted as specified by the
+  //    highlight overlays, we return them as a list.
+  // ---------------------------------------------------------------------------
+  const highlights: string[] = [];
+  const overlays: WebElement[] =
+    await driver.wait<WebElement[]>(
+      until.elementsLocated(
+        By.css("div:has(>div.cdr.wordHighlightText)")),
+      timeout);
+  for (const overlay of overlays) {
+    let style: string =
+      await driver.executeScript("return arguments[0].style.cssText", overlay);
+    style = style.replace(/ /g, "");
+    const viewLine: WebElement =
+      await driver.wait(
+        until.elementLocated(
+          By.css(`div[style="${style}"].view-line`)),
+        timeout);
+    const lineText: string = await viewLine.getText();
+    const spans: WebElement[] =
+      await overlay.findElements(By.css("div.cdr.wordHighlightText"));
+    for (const span of spans) {
+      const charWidth: number =
+        await driver.executeScript(GET_MONOSPACE_CHAR_WIDTH, span);
+      const left: number =
+        await driver.executeScript(
+          "return parseInt(arguments[0].style.left, 10)",
+          span);
+      const width: number =
+        await driver.executeScript(
+          "return parseInt(arguments[0].style.width, 10)",
+          span);
+      assert.equal(
+        left % charWidth, 0,
+        `Expected highlight offset ${left} to be divisible by ${charWidth}`);
+      assert.equal(
+        width % charWidth, 0,
+        `Expected highlight width ${width} to be divisible by ${charWidth}`);
+      const startChar: number = left / charWidth;
+      const numChars: number = width / charWidth;
+      const endChar: number = startChar + numChars;
+      const highlight = lineText.substring(startChar, endChar);
+      highlights.push(highlight);
+    }
+  }
+  return highlights;
 }
 
 // initialize the browser and webdriver
@@ -352,6 +425,48 @@ describe(fileName, () => {
       assert.equal(
         errorMessage,
         "Statement or Declaration expected inside program, found Variable name");
+    });
+  });
+
+  describe('When I begin to type a command with `@`', () => {
+    it('should provide me with a list of document symbols', async () => {
+      const prompt: InputBox = await workbench.openCommandPrompt() as InputBox;
+      await prompt.setText('@');
+      const quickPicks: QuickPickItem[] = await prompt.getQuickPicks();
+      const labels: string[] =
+        await Promise.all(quickPicks.map(async (q) => await q.getLabel()));
+      let superset: string[] | Set<string> = [
+        " module_function_call1",
+        " softmax",
+        " eval_1d",
+        " self",
+        " x",
+        " res",
+        " eval_1d_prime",
+        " self",
+        " x",
+        " res",
+        " 1_eval_1d",
+      ];
+      try {
+        assert.deepEqual(labels, superset);
+      } catch {
+        console.warn("Failed to exact-match against the suggestion list, checking if the results are a subset of the expected suggestions (such as if the window resolution is too small to display the entire list).")
+        superset = new Set<string>(superset);
+        assert.isTrue(
+          labels.reduce((acc, label) => acc && (superset as Set<string>).has(label), true),
+          `Expected ${labels} to be a subset of ${superset}`);
+      }
+    });
+  });
+
+  describe('When I navigate over "eval_1d"', () => {
+    it('should highlight all its instances', async () => {
+      await editor.setCursor(18, 22);
+      await workbench.executeCommand("Trigger Symbol Highlight");
+      const highlights: string[] = await getHighlightedText();
+      assert.isNotEmpty(highlights);
+      assert.isTrue(highlights.every(highlight => highlight === "eval_1d"));
     });
   });
 });

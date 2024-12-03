@@ -15,6 +15,8 @@ import {
   DidChangeConfigurationParams,
   // DidChangeTextDocumentParams,
   // DidChangeWatchedFilesParams,
+  DocumentHighlight,
+  DocumentHighlightParams,
   DocumentSymbolParams,
   Hover,
   HoverParams,
@@ -102,6 +104,7 @@ export class LFortranLanguageServer {
           triggerCharacters: ["0","1","2","3","4","5","6","7","8","9","_"],
         },
         definitionProvider: true,
+        documentHighlightProvider: true,
         documentSymbolProvider: true,
         hoverProvider: true,
         renameProvider: true,
@@ -395,12 +398,12 @@ export class LFortranLanguageServer {
     }
   }
 
-  renameSymbol(text: string, symbol: string, newName: string): TextEdit[] {
+  highlightSymbol(text: string, symbol: string): Range[] {
     // case-insensitive search
     text = text.toLowerCase();
     symbol = symbol.toLowerCase();
 
-    const edits: TextEdit[] = [];
+    const highlights: Range[] = [];
 
     let currLine: number = 0;
     let currCol: number = 0;
@@ -444,7 +447,7 @@ export class LFortranLanguageServer {
           const endLine: number = currLine;
           const endCol: number = currCol;
 
-          const range: Range = {
+          const highlight: Range = {
             start: {
               line: startLine,
               character: startCol,
@@ -455,12 +458,7 @@ export class LFortranLanguageServer {
             },
           };
 
-          const edit: TextEdit = {
-            range: range,
-            newText: newName,
-          };
-
-          edits.push(edit);
+          highlights.push(highlight);
         }
       } else {
         currCol++;
@@ -468,7 +466,14 @@ export class LFortranLanguageServer {
       }
     }
 
-    return edits;
+    return highlights;
+  }
+
+  renameSymbol(text: string, symbol: string, newName: string): TextEdit[] {
+    return this.highlightSymbol(text, symbol).map(range => ({
+      range: range,
+      newText: newName,
+    }));
   }
 
   async onRenameRequest(params: RenameParams): Promise<WorkspaceEdit | undefined | null> {
@@ -491,12 +496,39 @@ export class LFortranLanguageServer {
       // };
       const query: string | null = this.extractQuery(text, pos.line, pos.character);
       if (query !== null) {
-        const edits: TextEdit[] = this.renameSymbol(text, query, newName);
-        return {
-          changes: {
-            [uri]: edits,
-          },
-        };
+        const dictionary = this.dictionaries.get(uri);
+        if ((dictionary !== undefined) && dictionary.contains(query)) {
+          const edits: TextEdit[] = this.renameSymbol(text, query, newName);
+          const workspaceEdit: WorkspaceEdit = {
+            changes: {
+              [uri]: edits,
+            },
+          };
+          return workspaceEdit;
+        } else {
+          console.warn('Cannot find symbol to rename: "%s"', query);
+        }
+      }
+    }
+  }
+
+  async onDocumentHighlight(params: DocumentHighlightParams): Promise<DocumentHighlight[] | undefined | null> {
+    const uri: string = params.textDocument.uri;
+    const document = this.documents.get(uri);
+    if (document !== undefined) {
+      const text: string = document.getText();
+      const pos: Position = params.position;
+      const query: string | null = this.extractQuery(text, pos.line, pos.character);
+      if (query !== null) {
+        const dictionary = this.dictionaries.get(uri);
+        if ((dictionary !== undefined) && dictionary.contains(query)) {
+          const highlights: DocumentHighlight[] = this.highlightSymbol(text, query).map(range => ({
+            range: range,
+          }));
+          return highlights;
+        } else {
+          console.warn('Cannot find symbol to highlight: "%s"', query);
+        }
       }
     }
   }
