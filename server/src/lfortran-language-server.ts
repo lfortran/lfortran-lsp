@@ -320,10 +320,16 @@ export class LFortranLanguageServer {
     this.settings = await this.getDocumentSettings(uri);
     this.logger.configure(this.settings);
     const document = this.documents.get(uri);
-    const text = document?.getText();
-    if (typeof text === "string") {
+    if (document !== undefined) {
+      const text = document.getText();
       const line = request.position.line;
-      const column = request.position.character;
+      let column = request.position.character;
+      if (column > 0) {
+        const offset: number = document.offsetAt(request.position);
+        if ((offset == text.length) || !RE_IDENTIFIABLE.test(text[offset])) {
+          column--;  // might be at right side of word boundary
+        }
+      }
       definitions =
         await this.lfortran.lookupName(uri, text, line, column, this.settings);
     }

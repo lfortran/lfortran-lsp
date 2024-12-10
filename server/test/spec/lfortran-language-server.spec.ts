@@ -237,8 +237,9 @@ describe("LFortranLanguageServer", () => {
     });
 
     it("returns nothing when the document has not been defined", async () => {
+      document.getText.returns("");
       const actual = await server.onDefinition(request);
-      assert.isNull(actual);
+      assert.isEmpty(actual);
     });
   });
 

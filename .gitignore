@@ -16,6 +16,7 @@
 !/.github/workflows/*.yaml
 !/.github/workflows/*.yml
 !/.gitignore
+!/integ/issues/*.f90
 !/integ/spec/**/*.ts
 !/integ/tsconfig.json
 !/.mocharc.json
