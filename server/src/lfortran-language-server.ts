@@ -81,6 +81,8 @@ export class LFortranLanguageServer {
 
   public dictionaries = new Map<string, PrefixTrie>();
 
+  public symbolsPerDocument = new Map<string, SymbolInformation[]>();
+
   constructor(lfortran: LFortranAccessor,
               connection: _Connection,
               documents: TextDocuments<TextDocument>,
@@ -281,11 +283,11 @@ export class LFortranLanguageServer {
     );
   }
 
-  async onDocumentSymbol(request: DocumentSymbolParams): Promise<SymbolInformation[] | null> {
+  async onDocumentSymbol(request: DocumentSymbolParams): Promise<SymbolInformation[] | null | undefined> {
     const fnid: string = "onDocumentSymbol(...)";
     const start: number = performance.now();
 
-    let symbols: SymbolInformation[] | null = null;
+    let symbols: SymbolInformation[] | null | undefined = null;
     const uri = request.textDocument.uri;
     this.settings = await this.getDocumentSettings(uri);
     this.logger.configure(this.settings);
@@ -297,7 +299,15 @@ export class LFortranLanguageServer {
       if (symbols.length > 0) {
         // (symbols.length == 0) => error with document, but we still need to
         // support auto-completion.
+        this.symbolsPerDocument.set(uri, symbols);
         this.index(uri, symbols);
+      } else {
+        const diagnostics: Diagnostic[] =
+          await this.lfortran.showErrors(uri, text, this.settings);
+        if (diagnostics.length > 0) {
+          symbols = this.symbolsPerDocument.get(uri);
+          this.connection.sendDiagnostics({ uri: uri, diagnostics });
+        }
       }
     }
 
