@@ -463,7 +463,7 @@ describe(fileName, () => {
       const errorMessage: string = await getErrorAlert();
       assert.equal(
         errorMessage,
-        "Statement or Declaration expected inside program, found Variable name");
+        "Variable 'error' is not declared");
     });
   });
 
