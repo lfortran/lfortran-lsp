@@ -5,6 +5,7 @@ export interface LFortranSettings {
   maxNumberOfProblems: number;
   compiler: {
     lfortranPath: string;
+    flags: string;
   };
   log: {
     level: string;

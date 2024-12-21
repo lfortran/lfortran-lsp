@@ -69,6 +69,9 @@ export async function initState(): Promise<CommonState> {
     const lfortranPathSetting: Setting =
       await settingsEditor.findSettingByID("LFortranLanguageServer.compiler.lfortranPath");
     await lfortranPathSetting.setValue("./lfortran/src/bin/lfortran");
+    const compilerFlagsSetting: Setting =
+      await settingsEditor.findSettingByID("LFortranLanguageServer.compiler.flags");
+    await compilerFlagsSetting.setValue("");
     const fontFamily: Setting =
       await settingsEditor.findSettingByID("editor.fontFamily");
     await fontFamily.setValue('consolas, "DejaVu Sans Mono", monospace');
