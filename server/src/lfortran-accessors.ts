@@ -219,7 +219,6 @@ export class LFortranCLIAccessor implements LFortranAccessor {
             lfortranPath);
           this.logger.error(LFortranCLIAccessor.LOG_CONTEXT, err);
         }
-
         params = params.concat([this.tmpFile.name]);
 
         let escapedCommand: string | undefined;
@@ -316,7 +315,11 @@ export class LFortranCLIAccessor implements LFortranAccessor {
     const fnid: string = "showDocumentSymbols";
     const start: number = performance.now();
 
-    const flags = ["--show-document-symbols", "--continue-compilation"];
+    // run `echo "$(find . -type d | sed 's/^/-I/')"` and pass it as an argument to lfortran using spawnSync
+    // Execute the command within a shell
+    const find_output = spawnSync("echo $(find $(pwd) -type f -name '*.mod' -exec dirname {} \\; | sort -u | sed 's/^/-I/')", { shell: true });
+
+    const flags = ["--show-document-symbols", "--continue-compilation", find_output.stdout.toString().trim()];
     const stdout = await this.runCompiler(settings, flags, text, "[]");
 
     let symbols: SymbolInformation[];
@@ -374,12 +377,15 @@ export class LFortranCLIAccessor implements LFortranAccessor {
 
     const definitions: DefinitionLink[] = [];
 
+    const find_output = spawnSync("echo $(find $(pwd) -type f -name '*.mod' -exec dirname {} \\; | sort -u | sed 's/^/-I/')", { shell: true });
+
     try {
       const flags = [
         "--lookup-name",
         "--line=" + (line + 1),
         "--column=" + (column + 1),
-        "--continue-compilation"
+        "--continue-compilation",
+        find_output.stdout.toString().trim()
       ];
       const stdout = await this.runCompiler(settings, flags, text, "[]");
       const results = JSON.parse(stdout);
@@ -437,8 +443,9 @@ export class LFortranCLIAccessor implements LFortranAccessor {
 
     const diagnostics: Diagnostic[] = [];
     let stdout: string | null = null;
+    const find_output = spawnSync("echo $(find $(pwd) -type f -name '*.mod' -exec dirname {} \\; | sort -u | sed 's/^/-I/')", { shell: true });
     try {
-      const flags = ["--show-errors", "--continue-compilation"];
+      const flags = ["--show-errors", "--continue-compilation", find_output.stdout.toString().trim()];
       stdout =
         await this.runCompiler(settings, flags, text, "[]", true);
       if (stdout.length > 0) {
@@ -513,12 +520,14 @@ export class LFortranCLIAccessor implements LFortranAccessor {
     const start: number = performance.now();
 
     const edits: TextEdit[] = [];
+    const find_output = spawnSync("echo $(find $(pwd) -type f -name '*.mod' -exec dirname {} \\; | sort -u | sed 's/^/-I/')", { shell: true });
     try {
       const flags = [
         "--rename-symbol",
         "--line=" + (line + 1),
         "--column=" + (column + 1),
-        "--continue-compilation"
+        "--continue-compilation",
+        find_output.stdout.toString().trim()
       ];
       const stdout = await this.runCompiler(settings, flags, text, "[]");
       const obj = JSON.parse(stdout);
