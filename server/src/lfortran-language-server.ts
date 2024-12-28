@@ -106,6 +106,7 @@ const symbolKindToCompletionItemKind: Map<SymbolKind, CompletionItemKind> = new 
 const RE_IDENTIFIABLE: RegExp = /^[a-z0-9_]$/i;
 const RE_ALPHABETIC: RegExp = /^[a-z]$/i;
 const RE_ALPHA_UNDER: RegExp = /^[a-z_]$/i;
+const RE_QUOTE: RegExp = /['"]/;
 
 interface FileCacheEntry {
   mtime: Date;
@@ -638,13 +639,14 @@ export class LFortranLanguageServer {
     let currLine: number = 0;
     let currCol: number = 0;
 
+    const reIdentifiable: RegExp = RE_IDENTIFIABLE;
+    const reAlphabetic: RegExp = RE_ALPHABETIC;
+    const reQuote: RegExp = RE_QUOTE;
     for (let i = 0, k = text.length; i < k; i++) {
       let c: string = text[i];
 
       if ((line === currLine) && (column === currCol)) {
-        const reIdentifiable: RegExp = RE_IDENTIFIABLE;
-        const reAlphabetic: RegExp = RE_ALPHABETIC;
-        if (!reIdentifiable.test(c) && (i > 0) && reIdentifiable.test(text[i - 1])) {
+        if (!reIdentifiable.test(c) && !reQuote.test(c) && (i > 0) && reIdentifiable.test(text[i - 1])) {
           // Cursor is just right of the query string's word boundary.
           i--;
           c = text[i];
@@ -663,6 +665,9 @@ export class LFortranLanguageServer {
           }
           while ((u < k) && reIdentifiable.test(text[u])) {
             u++;
+          }
+          if (RE_QUOTE.test(text[u]) && (u > 0) && (text[u - 1] === '_')) {
+            u--;
           }
           query = text.substring(l, u);
           break;
@@ -846,7 +851,10 @@ export class LFortranLanguageServer {
             currCol += j;
             i += (j - 1);
 
-            if ((j === l) && (((i + 1) === k) || !reIdentifiable.test(text[i + 1]))) {
+            if ((j === l) &&
+                (((i + 1) === k) ||
+                 !reIdentifiable.test(text[i + 1]) ||
+                 ((text[i + 1] === '_') && ((i + 2) < k) && RE_QUOTE.test(text[i + 2])))) {
               const endLine: number = currLine;
               const endCol: number = currCol;
 
@@ -923,11 +931,11 @@ export class LFortranLanguageServer {
     return workspaceEdit;
   }
 
-  async onDocumentHighlight(params: DocumentHighlightParams): Promise<DocumentHighlight[] | null> {
+  async onDocumentHighlight(params: DocumentHighlightParams): Promise<DocumentHighlight[]> {
     const fnid: string = "onDocumentHighlight";
     const start: number = performance.now();
 
-    let highlights: DocumentHighlight[] | null = null;
+    let highlights: DocumentHighlight[];
     const uri: string = params.textDocument.uri;
     const document = this.documents.get(uri);
 
@@ -936,15 +944,14 @@ export class LFortranLanguageServer {
       const pos: Position = params.position;
       const query: string | null = this.extractQuery(text, pos.line, pos.character);
       if (query !== null) {
-        const dictionary = this.dictionaries.get(uri);
-        if ((dictionary !== undefined) && dictionary.contains(query)) {
-          highlights = this.highlightSymbol(text, query).map(range => ({
-            range: range,
-          }));
-        } else {
-          this.logWarn('Cannot find symbol to highlight: "%s"', query);
-        }
+        highlights = this.highlightSymbol(text, query).map(range => ({
+          range: range,
+        }));
+      } else {
+        highlights = [];
       }
+    } else {
+      highlights = [];
     }
 
     if (this.logger.isBenchmarkOrTraceEnabled()) {
@@ -956,6 +963,7 @@ export class LFortranLanguageServer {
         highlights
       );
     }
+
     return highlights;
   }
 }

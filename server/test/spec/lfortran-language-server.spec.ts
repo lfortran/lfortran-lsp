@@ -611,6 +611,62 @@ describe("LFortranLanguageServer", () => {
       query = server.extractQuery(text, 0, 27);  // actual text " "
       assert.isNull(query);
     });
+
+    it("extracts prefix types", () => {
+      const text: string = "print *, foo_'string'";
+
+      let query: string | null = server.extractQuery(text, 0, 8);
+      assert.isNull(query);
+
+      query = server.extractQuery(text, 0, 9);
+      assert.equal(query, "foo");
+
+      query = server.extractQuery(text, 0, 10);
+      assert.equal(query, "foo");
+
+      query = server.extractQuery(text, 0, 11);
+      assert.equal(query, "foo");
+
+      query = server.extractQuery(text, 0, 12);
+      assert.equal(query, "foo");
+
+      query = server.extractQuery(text, 0, 13);
+      assert.isNull(query);
+    });
+
+    it("extracts suffix types", () => {
+      const text: string = "f(123.456_my_dbl) + x";
+
+      let query: string | null = server.extractQuery(text, 0, 8);
+      assert.isNull(query);
+
+      query = server.extractQuery(text, 0, 9);
+      assert.isNull(query);
+
+      query = server.extractQuery(text, 0, 10);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 11);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 12);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 13);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 14);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 15);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 16);
+      assert.equal(query, "my_dbl");
+
+      query = server.extractQuery(text, 0, 17);
+      assert.isNull(query);
+    });
   });
 
   describe("onCompletion", () => {
@@ -888,7 +944,7 @@ describe("LFortranLanguageServer", () => {
   });
 
   describe("onDocumentHighlight", () => {
-    it("does not highlight symbols when they are not recognized", async () => {
+    it("highlights symbols when they are not recognized", async () => {
       const text: string = "foo bar foo baz.foo";
       document.getText.returns(text);
 
@@ -923,11 +979,24 @@ describe("LFortranLanguageServer", () => {
       };
 
       const actual: DocumentHighlight[] | undefined | null = await server.onDocumentHighlight(params);
-      assert.isNull(actual);
+      assert.deepEqual(actual, [
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 4,
+            },
+            end: {
+              line: 0,
+              character: 7,
+            },
+          },
+        },
+      ]);
     });
 
     it("highlights symbols when they are recognized", async () => {
-      const text: string = "foo bar foo baz.foo";
+      const text: string = "foo bar foo baz%foo foo_'str' 123.456_foo";
       document.getText.returns(text);
 
       const symbols: SymbolInformation[] = [
@@ -986,6 +1055,30 @@ describe("LFortranLanguageServer", () => {
             end: {
               line: 0,
               character: 19,
+            },
+          },
+        },
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 20,
+            },
+            end: {
+              line: 0,
+              character: 23,
+            },
+          },
+        },
+        {
+          range: {
+            start: {
+              line: 0,
+              character: 38,
+            },
+            end: {
+              line: 0,
+              character: 41,
             },
           },
         },
