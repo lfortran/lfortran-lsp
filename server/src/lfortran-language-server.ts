@@ -5,8 +5,6 @@
 
 import fs from 'fs';
 
-import path from 'path';
-
 import {
   CompletionItem,
   CompletionItemKind,
@@ -260,29 +258,8 @@ export class LFortranLanguageServer {
     const document = this.documents.get(uri);
     let text = document?.getText();
     if (text === undefined) {
-      let filePath: string = uri;
-      if (filePath.startsWith("file://")) {
-        filePath = filePath.substring(7);
-      }
-      if (!fs.existsSync(filePath)) {
-        let resolution: string | undefined = resolved?.get(filePath);
-        if (resolution === undefined) {
-          for (const flag of this.settings.compiler.flags) {
-            if (flag.startsWith("-I")) {
-              const includeDir = flag.substring(2);
-              resolution = path.join(includeDir, filePath);
-              if (fs.existsSync(resolution)) {
-                resolution = fs.realpathSync(resolution);
-                resolved?.set(filename, resolution);
-                filePath = resolution;
-                break;
-              }
-            }
-          }
-        } else {
-          filePath = resolution;
-        }
-      }
+      const filePath: string =
+        this.lfortran.resolve(uri, uri, this.settings.compiler.flags, resolved);
       if (fs.existsSync(filePath)) {
         let entry = this.fileCache.get(filePath);
         const stats = fs.statSync(filePath);

@@ -33,11 +33,18 @@ import {
 
 import shellescape from 'shell-escape';
 
+const RE_FILE_URI: RegExp = /^file:(?:\/\/)?/;
+
 /**
  * Accessor interface for interacting with LFortran. Possible implementations
  * include a CLI accessor and service accessor.
  */
 export interface LFortranAccessor {
+
+  resolve(uri: string,
+          filename: string,
+          flags: string[],
+          resolved?: Map<string, string>): string;
 
   version(settings: LFortranSettings): Promise<string>;
 
@@ -299,11 +306,20 @@ export class LFortranCLIAccessor implements LFortranAccessor {
     return output;
   }
 
-  resolve(filename: string, flags: string[], resolved?: Map<string, string>): string {
+  resolve(uri: string,
+          filename: string,
+          flags: string[],
+          resolved?: Map<string, string>): string {
     const fnid: string = "resolve";
     const start: number = performance.now();
 
     let filePath: string = filename;
+
+    if (filePath === this.tmpFile.name) {
+      filePath = uri;
+    }
+
+    filePath = filePath.replace(RE_FILE_URI, "");
 
     if (!fs.existsSync(filePath)) {
       let resolution: string | undefined = resolved?.get(filePath);
@@ -331,8 +347,12 @@ export class LFortranCLIAccessor implements LFortranAccessor {
 
     // if file name is `b.f90` then it will be replaced with `$(pwd)/b.f90`
     // if file name is `a/b.f90` then it will be replaced with `$(pwd)/a/b.f90`
-
+    // -----------------------------------------------------------------------
+    // TODO: Collect an example that demonstrates the need for this resolution
+    // that does not work with `fs.realpathSync`, above.
+    // -----------------------------------------------------------------------
     const newFilePath: string = path.resolve(filePath);
+
     if (this.logger.isBenchmarkOrTraceEnabled()) {
       this.logBenchmarkAndTrace(
         fnid, start,
@@ -374,7 +394,7 @@ export class LFortranCLIAccessor implements LFortranAccessor {
       for (let i = 0, k = symbols.length; i < k; i++) {
         const symbol: Record<string, any> = symbols[i];
         const symbolPath: string =
-          this.resolve(symbol.filename, settings.compiler.flags, resolved);
+          this.resolve(uri, symbol.filename, settings.compiler.flags, resolved);
 
         const location: Location = symbol.location;
         // location.uri = uri;
@@ -428,8 +448,8 @@ export class LFortranCLIAccessor implements LFortranAccessor {
       const results: Record<string, any>[] = JSON.parse(stdout);
       for (let i = 0, k = results.length; i < k; i++) {
         const result: Record<string, any> = results[i];
-        let symbolPath: string =
-          this.resolve(result.filename, settings.compiler.flags);
+        const symbolPath: string =
+          this.resolve(uri, result.filename, settings.compiler.flags);
 
         const location = result.location;
 
@@ -443,9 +463,6 @@ export class LFortranCLIAccessor implements LFortranAccessor {
         end.line--;
         end.character--;
 
-        if (symbolPath.endsWith(".tmp")) {
-          symbolPath = uri;
-        }
         definitions.push({
           targetUri: symbolPath,
           targetRange: range,
